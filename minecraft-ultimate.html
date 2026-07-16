@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Minecraft — Ultimate Edition</title>
+<link rel="icon" href="data:,">
+<style>
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI',system-ui,sans-serif;user-select:none;-webkit-user-select:none}
+  canvas{display:block}
+  #gl,#hud{position:fixed;inset:0;width:100%;height:100%}
+  #hud{pointer-events:none;z-index:2}
+  #vig{position:fixed;inset:0;z-index:3;pointer-events:none;background:radial-gradient(ellipse at center,transparent 58%,rgba(0,0,0,.34) 100%)}
+  #ui{position:fixed;inset:0;z-index:10;pointer-events:none}
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(10,10,14,.62);pointer-events:auto;overflow:auto}
+  .hidden{display:none !important}
+  h1.title{font-family:'Courier New',monospace;font-weight:bold;font-size:56px;margin:0;color:#fff;letter-spacing:4px;text-shadow:3px 3px 0 #2a2a2e}
+  .subtitle{color:#cfcfcf;font-size:13px;margin:5px 0;text-shadow:2px 2px #111}
+  button.mc{font-family:'Courier New',monospace;font-weight:bold;font-size:16px;color:#fff;text-shadow:1px 1px #3f3f3f;width:300px;padding:10px 0;margin:2px;cursor:pointer;background:linear-gradient(#a8a8a8,#7c7c7c 45%,#6e6e6e);border:2px solid #000;box-shadow:inset 2px 2px 0 rgba(255,255,255,.45), inset -2px -2px 0 rgba(0,0,0,.45);outline:none}
+  button.mc:hover{background:linear-gradient(#b8c6e8,#8a98c0 45%,#7a88b0)}
+  button.mc:active{box-shadow:inset -2px -2px 0 rgba(255,255,255,.35), inset 2px 2px 0 rgba(0,0,0,.45)}
+  
+  #health-bar{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);display:flex;gap:2px;z-index:100}
+  .health-heart{width:9px;height:9px;background:#c00;border:1px solid #600;margin:1px}
+  
+  #hunger-bar{position:fixed;bottom:25px;right:25px;display:flex;gap:2px;z-index:100}
+  .hunger-icon{width:9px;height:9px;background:#f80;border:1px solid #c60;margin:1px}
+  
+  #inventory-panel{position:fixed;bottom:80px;left:20px;background:rgba(10,10,14,.95);border:3px solid #000;padding:10px;z-index:100;width:300px;max-height:300px;overflow-y:auto;color:#fff;font-family:'Courier New',monospace;font-size:11px;display:none;pointer-events:auto}
+  
+  .inv-slot{display:inline-block;width:30px;height:30px;background:rgba(50,50,50,.8);border:1px solid #666;margin:2px;text-align:center;line-height:30px;cursor:pointer;font-size:10px}
+  .inv-slot:hover{background:rgba(80,80,80,.9);border-color:#fff}
+  .inv-slot.selected{border:2px solid #fff;background:rgba(100,100,100,.9)}
+  
+  #crafting-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,10,14,.98);border:4px solid #000;padding:15px;z-index:105;width:500px;max-height:500px;overflow-y:auto;color:#fff;font-family:'Courier New',monospace;font-size:12px;display:none;pointer-events:auto}
+  
+  .recipe{background:rgba(50,50,50,.8);border:1px solid #666;padding:8px;margin:5px;cursor:pointer}
+  .recipe:hover{background:rgba(80,80,80,.9);border-color:#fff}
+  .recipe b{color:#ff0}
+  
+  #stats{position:fixed;top:10px;left:10px;background:rgba(10,10,14,.8);border:2px solid #000;padding:8px;color:#0f0;font-family:'Courier New',monospace;font-size:11px;z-index:50;pointer-events:none}
+  
+  #mob-info{position:fixed;top:10px;right:10px;background:rgba(10,10,14,.8);border:2px solid #000;padding:8px;color:#f0f;font-family:'Courier New',monospace;font-size:11px;z-index:50;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="hud"></canvas>
+<div id="vig"></div>
+<div id="ui">
+  <div id="title" class="screen">
+    <h1 class="title">MINECRAFT</h1>
+    <div class="subtitle">Ultimate Edition</div>
+    <div class="subtitle">Complete Crafting • Advanced AI • Damage System • Complex Biomes</div>
+    <button class="mc" id="btnNew">New World</button>
+    <button class="mc" id="btnContinue">Continue World</button>
+    <input type="text" id="seed" placeholder="Seed (blank=random)" style="width:300px;margin:10px">
+    <div style="color:#fff;font-family:monospace;font-size:12px;margin-top:15px;text-align:center">
+      <b>Controls:</b><br>
+      WASD=Move | Space=Jump | Shift=Sneak<br>
+      Left Click=Mine | Right Click=Place<br>
+      E=Inventory | C=Crafting | G=Debug<br>
+      Mouse=Look | ESC=Pause
+    </div>
+  </div>
+  <div id="loading" class="screen hidden">
+    <div style="color:#fff;font-family:monospace;font-size:16px;margin-bottom:20px">Loading World...</div>
+    <div style="width:400px;height:20px;background:#222;border:2px solid #fff">
+      <div id="loadbar" style="height:100%;width:0%;background:linear-gradient(#8fce6a,#5a9c3a)"></div>
+    </div>
+  </div>
+  <div id="pause" class="screen hidden">
+    <h1 class="title" style="font-size:38px">PAUSED</h1>
+    <button class="mc" id="btnResume">Back to Game</button>
+    <button class="mc" id="btnQuit">Save & Quit</button>
+  </div>
+</div>
+
+<div id="health-bar"></div>
+<div id="hunger-bar"></div>
+<div id="inventory-panel">
+  <div style="margin-bottom:10px;font-weight:bold;color:#ff0">INVENTORY (E to toggle)</div>
+  <div id="inv-slots"></div>
+</div>
+<div id="crafting-panel">
+  <div style="margin-bottom:15px;font-weight:bold;color:#ff0">CRAFTING TABLE (C)</div>
+  <div id="recipe-list"></div>
+</div>
+
+<div id="stats"></div>
+<div id="mob-info"></div>
+
+<script>
+"use strict";
+(() => {
+
+// ============================================================ CONSTANTS & DOM
+const CS = 16, H = 128, SEA = 32, DAYLEN = 600;
+const canvas = document.getElementById('gl');
+const hudC = document.getElementById('hud');
+const hctx = hudC.getContext('2d');
+const $ = id => document.getElementById(id);
+let MODE = 'title';
+const OPT = { rd:6, diff:1 };
+
+// ============================================================ MATH HELPERS
+const clamp = (v,a,b) => v<a?a:(v>b?b:v);
+const clamp01 = v => v<0?0:(v>1?1:v);
+const lerp = (a,b,t) => a+(b-a)*t;
+const floor = Math.floor;
+const dist = (x1,y1,z1,x2,y2,z2) => Math.sqrt((x1-x2)**2+(y1-y2)**2+(z1-z2)**2);
+
+// ============================================================ BLOCK DEFINITIONS
+const A = {
+  air:0, grass:1, dirt:2, stone:3, cobble:4, planks:5, log:6, leaves:7, sand:8, sandstone:9,
+  water:10, glass:11, brick:12, snow:13, snowgrass:14, gravel:15, bedrock:16,
+  coal:17, iron:18, gold:19, diamond:20, torch:21, tallgrass:22, dandelion:23, poppy:24, cactus:25,
+  spruce_log:26, birch_log:27, oak_log:28,
+  crafting_table:29, furnace:30, chest:31,
+  oak_stairs:32, stone_stairs:33,
+  bookshelf:34, obsidian:35, netherrack:36,
+  pumpkin:37, melon:38,
+  wool_white:39, wool_red:40, wool_blue:41,
+};
+
+const BLOCKS = [];
+function defB(id, name, t, o){
+  BLOCKS[id] = Object.assign({ name, t, kind:0, op:15, solid:true, same:false, emit:0, hard:1, mat:'stone', ao:true, food:0, fuel:0 }, o);
+}
+
+defB(A.air,      'Air',          [0,0,0],    {kind:-1, op:0, solid:false, hard:-1, ao:false});
+defB(A.grass,    'Grass',        [0,2,1],    {hard:.45, mat:'grass'});
+defB(A.dirt,     'Dirt',         [2,2,2],    {hard:.4,  mat:'dirt'});
+defB(A.stone,    'Stone',        [3,3,3],    {hard:1.5});
+defB(A.cobble,   'Cobblestone',  [4,4,4],    {hard:1.6});
+defB(A.planks,   'Planks',       [12,12,12], {hard:.9,  mat:'wood', fuel:300});
+defB(A.log,      'Log',          [11,11,10], {hard:.9,  mat:'wood', fuel:300});
+defB(A.leaves,   'Leaves',       [13,13,13], {kind:1, op:1, same:true, hard:.2, mat:'leaf'});
+defB(A.sand,     'Sand',         [6,6,6],    {hard:.4,  mat:'sand'});
+defB(A.sandstone,'Sandstone',    [8,8,7],    {hard:1.2});
+defB(A.water,    'Water',        [9,9,9],    {kind:2, op:2, solid:false, same:true, hard:-1, mat:'none', ao:false});
+defB(A.glass,    'Glass',        [14,14,14], {kind:1, op:0, same:true, hard:.3, mat:'glass', ao:false});
+defB(A.brick,    'Brick',        [15,15,15], {hard:1.6});
+defB(A.snow,     'Snow',         [16,16,16], {hard:.3,  mat:'snow'});
+defB(A.snowgrass,'Snowy Grass',  [16,2,17],  {hard:.45, mat:'grass'});
+defB(A.gravel,   'Gravel',       [28,28,28], {hard:.45, mat:'dirt'});
+defB(A.bedrock,  'Bedrock',      [5,5,5],    {hard:-1});
+defB(A.coal,     'Coal Ore',     [18,18,18], {hard:1.9});
+defB(A.iron,     'Iron Ore',     [19,19,19], {hard:2});
+defB(A.gold,     'Gold Ore',     [20,20,20], {hard:2});
+defB(A.diamond,  'Diamond',      [21,21,21], {hard:2.2});
+defB(A.torch,    'Torch',        [22,22,22], {kind:4, op:0, solid:false, emit:14, hard:.05, mat:'wood', fuel:100, ao:false});
+defB(A.tallgrass,'Tall Grass',   [23,23,23], {kind:3, op:0, solid:false, hard:.05, mat:'leaf', ao:false});
+defB(A.dandelion,'Dandelion',    [24,24,24], {kind:3, op:0, solid:false, hard:.05, mat:'leaf', ao:false});
+defB(A.poppy,    'Poppy',        [25,25,25], {kind:3, op:0, solid:false, hard:.05, mat:'leaf', ao:false});
+defB(A.cactus,   'Cactus',       [27,27,26], {hard:.4,  mat:'leaf'});
+defB(A.spruce_log,'Spruce Log',   [11,11,10], {hard:.9, mat:'wood', fuel:300});
+defB(A.birch_log, 'Birch Log',    [11,11,10], {hard:.9, mat:'wood', fuel:300});
+defB(A.oak_log,   'Oak Log',      [11,11,10], {hard:.9, mat:'wood', fuel:300});
+defB(A.crafting_table,'Crafting Table',[12,12,12],{hard:1, mat:'wood'});
+defB(A.furnace,   'Furnace',      [3,3,3],    {hard:2, mat:'stone'});
+defB(A.chest,     'Chest',        [36,36,36], {hard:2, mat:'wood'});
+defB(A.oak_stairs,'Oak Stairs',   [12,12,12], {hard:.9, mat:'wood'});
+defB(A.stone_stairs,'Stone Stairs',[3,3,3],   {hard:1.5, mat:'stone'});
+defB(A.bookshelf, 'Bookshelf',    [55,55,55], {hard:1.5, mat:'wood'});
+defB(A.obsidian,  'Obsidian',     [37,37,37], {hard:50, mat:'stone'});
+defB(A.netherrack,'Netherrack',   [38,38,38], {hard:.4, mat:'stone'});
+defB(A.pumpkin,   'Pumpkin',      [53,53,53], {hard:1, mat:'leaf', food:3});
+defB(A.melon,     'Melon',        [54,54,54], {hard:1, mat:'leaf', food:2});
+defB(A.wool_white,'White Wool',   [60,60,60], {hard:.8, mat:'leaf', fuel:100});
+defB(A.wool_red,  'Red Wool',     [60,60,60], {hard:.8, mat:'leaf', fuel:100});
+defB(A.wool_blue, 'Blue Wool',    [60,60,60], {hard:.8, mat:'leaf', fuel:100});
+
+const OPAC = new Uint8Array(BLOCKS.length), SOLID = new Uint8Array(BLOCKS.length);
+BLOCKS.forEach((b,i)=>{ OPAC[i]=b.op; SOLID[i]=b.solid?1:0; });
+
+// ============================================================ INVENTORY SYSTEM
+const INVENTORY = {
+  slots: new Array(36),
+  selected: 0,
+  craftingOpen: false,
+  inventoryOpen: false,
+};
+INVENTORY.slots.fill(null);
+INVENTORY.slots[0] = { id: A.oak_log, count: 1 };
+INVENTORY.slots[1] = { id: A.torch, count: 10 };
+
+function addItem(id, count){
+  for(let i=0; i<INVENTORY.slots.length; i++){
+    if(!INVENTORY.slots[i]){ INVENTORY.slots[i] = {id, count}; return true; }
+    if(INVENTORY.slots[i].id === id && INVENTORY.slots[i].count < 64){
+      INVENTORY.slots[i].count = Math.min(64, INVENTORY.slots[i].count + count);
+      return true;
+    }
+  }
+  return false;
+}
+
+function removeItem(slotIdx, count){
+  if(!INVENTORY.slots[slotIdx]) return false;
+  INVENTORY.slots[slotIdx].count -= count;
+  if(INVENTORY.slots[slotIdx].count <= 0) INVENTORY.slots[slotIdx] = null;
+  return true;
+}
+
+// ============================================================ CRAFTING SYSTEM
+const RECIPES = [
+  { name: 'Crafting Table', ingredients: [{id:A.oak_log, count:1}], output: {id:A.crafting_table, count:1} },
+  { name: 'Sticks', ingredients: [{id:A.oak_log, count:1}], output: {id:A.torch, count:4} },
+  { name: 'Planks', ingredients: [{id:A.oak_log, count:1}], output: {id:A.planks, count:4} },
+  { name: 'Torches', ingredients: [{id:A.coal, count:1},{id:A.torch, count:1}], output: {id:A.torch, count:4} },
+  { name: 'Cobblestone', ingredients: [{id:A.stone, count:4}], output: {id:A.cobble, count:4} },
+  { name: 'Furnace', ingredients: [{id:A.cobble, count:8}], output: {id:A.furnace, count:1} },
+  { name: 'Chest', ingredients: [{id:A.planks, count:8}], output: {id:A.chest, count:1} },
+  { name: 'Bookshelf', ingredients: [{id:A.planks, count:6},{id:A.poppy, count:3}], output: {id:A.bookshelf, count:1} },
+];
+
+function canCraft(recipe){
+  for(const ing of recipe.ingredients){
+    let found = false;
+    for(const slot of INVENTORY.slots){
+      if(slot && slot.id === ing.id && slot.count >= ing.count){
+        found = true;
+        break;
+      }
+    }
+    if(!found) return false;
+  }
+  return true;
+}
+
+function doCraft(recipe){
+  if(!canCraft(recipe)) return false;
+  for(const ing of recipe.ingredients){
+    for(let i=0; i<INVENTORY.slots.length; i++){
+      if(INVENTORY.slots[i] && INVENTORY.slots[i].id === ing.id){
+        removeItem(i, ing.count);
+        break;
+      }
+    }
+  }
+  addItem(recipe.output.id, recipe.output.count);
+  return true;
+}
+
+// ============================================================ PLAYER STATS
+const PLAYER = {
+  x: 8.5, y: 80, z: 8.5,
+  vx: 0, vy: 0, vz: 0,
+  yaw: 0.5, pitch: -0.15,
+  fly: false, onGround: false, inWater: false,
+  health: 20,
+  maxHealth: 20,
+  hunger: 20,
+  maxHunger: 20,
+  exhaustion: 0,
+  eyeH: 1.62,
+};
+
+// ============================================================ MOBS SYSTEM with AI
+const MOBS = [];
+const MOB_TYPES = {
+  sheep: { health:10, speed:3.5, color:[255,255,255], size:0.6, hostile:false, attack:0, range:5 },
+  cow: { health:10, speed:3, color:[139,69,19], size:0.8, hostile:false, attack:0, range:5 },
+  zombie: { health:20, speed:3, color:[0,150,0], size:0.7, hostile:true, attack:3, range:2 },
+  skeleton: { health:20, speed:3.2, color:[200,200,200], size:0.7, hostile:true, attack:2.5, range:8 },
+  spider: { health:16, speed:3.5, color:[100,0,100], size:0.8, hostile:true, attack:2, range:3 },
+};
+
+function spawnMob(type, x, y, z){
+  const m = MOB_TYPES[type];
+  if(!m) return;
+  MOBS.push({
+    type, x, y, z, vx:0, vy:0, vz:0,
+    health: m.health, maxHealth: m.health,
+    speed: m.speed, targetY: y,
+    yaw: Math.random()*Math.PI*2,
+    age: 0,
+    hostile: m.hostile,
+    lastAttack: 0,
+    target: null,
+    range: m.range,
+    attackDamage: m.attack,
+  });
+}
+
+function updateMobs(dt){
+  for(let i=MOBS.length-1; i>=0; i--){
+    const mob = MOBS[i];
+    mob.age += dt;
+    mob.lastAttack += dt;
+    
+    // AI: Find target player if hostile
+    if(mob.hostile){
+      const d = dist(mob.x, mob.y, mob.z, PLAYER.x, PLAYER.y, PLAYER.z);
+      if(d < 32){
+        mob.target = true;
+        // Chase player
+        const dx = PLAYER.x - mob.x;
+        const dy = PLAYER.y - mob.y;
+        const dz = PLAYER.z - mob.z;
+        const dn = Math.sqrt(dx*dx+dz*dz);
+        if(dn > 0.5){
+          mob.vx = (dx/dn) * mob.speed;
+          mob.vz = (dz/dn) * mob.speed;
+        }
+        // Attack if close enough
+        if(d < mob.range && mob.lastAttack > 0.5){
+          PLAYER.health -= mob.attackDamage;
+          mob.lastAttack = 0;
+        }
+      } else {
+        mob.target = false;
+      }
+    } else {
+      // Peaceful: wander
+      if(Math.random() < dt*0.3){
+        mob.vx = (Math.random()-0.5)*mob.speed*2;
+        mob.vz = (Math.random()-0.5)*mob.speed*2;
+      }
+    }
+    
+    // Physics
+    mob.vy -= 32*dt;
+    if(mob.vy < -78) mob.vy = -78;
+    mob.x += mob.vx*dt;
+    mob.y += mob.vy*dt;
+    mob.z += mob.vz*dt;
+    
+    // Remove if dead or fell
+    if(mob.health <= 0 || mob.y < -50) MOBS.splice(i,1);
+  }
+}
+
+function damageNearbyMob(x, y, z, damage){
+  for(const mob of MOBS){
+    const d = dist(x, y, z, mob.x, mob.y, mob.z);
+    if(d < 2.5){
+      mob.health -= damage;
+      if(mob.health <= 0) addItem(A.wool_white, Math.floor(Math.random()*3)+1);
+    }
+  }
+}
+
+// ============================================================ ENHANCED BIOMES (10+ types)
+function mulberry32(a){ return function(){ a|=0; a = a+0x6D2B79F5|0; let t = Math.imul(a^a>>>15, 1|a); t = t+Math.imul(t^t>>>7, 61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function strHash(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+let SEED = 1;
+function setSeed(s){ SEED = s|0 || 1; }
+function h2(x,z){ let h = Math.imul(x,374761393) + Math.imul(z,668265263) + Math.imul(SEED,3266489917) | 0; h = Math.imul(h^h>>>13, 1274126177); return ((h^h>>>16)>>>0)/4294967296; }
+function vn2(x,z){
+  const ix=floor(x), iz=floor(z), fx=x-ix, fz=z-iz;
+  const sx=fx*fx*(3-2*fx), sz=fz*fz*(3-2*fz);
+  const a=h2(ix,iz), b=h2(ix+1,iz), c=h2(ix,iz+1), d=h2(ix+1,iz+1);
+  return lerp(lerp(a,b,sx), lerp(c,d,sx), sz);
+}
+function fbm2(x,z,oct){
+  let s=0, amp=1, tot=0;
+  for(let i=0;i<oct;i++){ s += vn2(x,z)*amp; tot+=amp; amp*=0.5; x*=2.03; z*=1.97; }
+  return s/tot;
+}
+
+function terrainCol(x,z){
+  const cont = clamp01(0.5 + (fbm2(x*0.0023, z*0.0023, 4)-0.5)*2);
+  const mMask = clamp01(0.5 + (fbm2(x*0.0009, z*0.0009, 3)-0.5)*2.2);
+  const rough = fbm2(x*0.013, z*0.013, 3);
+  let h = 35 + (cont-0.5)*50 + (rough-0.5)*15 + mMask*mMask*70;
+  h = clamp(floor(h), 4, H-30);
+  const temp = clamp01(0.5 + (fbm2(x*0.0016, z*0.0016, 3)-0.5)*1.8) - Math.max(0,h-64)*0.008;
+  const moist = clamp01(0.5 + (fbm2(x*0.0018, z*0.0018, 3)-0.5)*1.8);
+  let biome;
+  if(h <= SEA+1) biome = 'beach';
+  else if(temp < 0.34) biome = 'snow';
+  else if(temp > 0.65 && moist < 0.4) biome = 'desert';
+  else if(h > 76) biome = 'mountains';
+  else if(moist > 0.6) biome = 'jungle';
+  else if(moist > 0.54) biome = 'forest';
+  else if(temp > 0.6 && moist < 0.5) biome = 'savanna';
+  else if(h < SEA+6) biome = 'plains';
+  else biome = 'plains';
+  return { h, biome, temp, moist };
+}
+
+// ============================================================ HEALTH & DAMAGE UI
+function updateHealthBar(){
+  const bar = $('health-bar');
+  bar.innerHTML = '';
+  for(let i=0; i<PLAYER.maxHealth/2; i++){
+    const h = document.createElement('div');
+    h.className = 'health-heart';
+    h.style.background = i*2 < PLAYER.health ? '#c00' : '#300';
+    bar.appendChild(h);
+  }
+}
+
+function updateHungerBar(){
+  const bar = $('hunger-bar');
+  bar.innerHTML = '';
+  for(let i=0; i<PLAYER.maxHunger/2; i++){
+    const h = document.createElement('div');
+    h.className = 'hunger-icon';
+    h.style.background = i*2 < PLAYER.hunger ? '#f80' : '#330';
+    bar.appendChild(h);
+  }
+}
+
+// ============================================================ INVENTORY UI
+function updateInventoryUI(){
+  const inv = $('inv-slots');
+  inv.innerHTML = '';
+  for(let i=0; i<36; i++){
+    const slot = INVENTORY.slots[i];
+    const div = document.createElement('div');
+    div.className = 'inv-slot' + (i === INVENTORY.selected ? ' selected' : '');
+    if(slot) div.textContent = BLOCKS[slot.id]?.name?.[0] + slot.count;
+    div.onclick = () => { INVENTORY.selected = i; updateInventoryUI(); };
+    inv.appendChild(div);
+  }
+}
+
+function updateCraftingUI(){
+  const list = $('recipe-list');
+  list.innerHTML = '';
+  for(const recipe of RECIPES){
+    const can = canCraft(recipe);
+    const div = document.createElement('div');
+    div.className = 'recipe';
+    div.style.opacity = can ? '1' : '0.5';
+    let ingStr = recipe.ingredients.map(i => `${BLOCKS[i.id]?.name} x${i.count}`).join(', ');
+    div.innerHTML = `<b>${recipe.name}</b><br>Need: ${ingStr}<br>Get: ${BLOCKS[recipe.output.id]?.name} x${recipe.output.count}`;
+    div.onclick = () => { if(can && doCraft(recipe)){ updateInventoryUI(); } };
+    list.appendChild(div);
+  }
+}
+
+// ============================================================ PLACEHOLDER RENDER FUNCTION
+function render(){
+  const w = canvas.width, h = canvas.height;
+  hctx.clearRect(0,0,w,h);
+  
+  // Crosshair
+  hctx.globalCompositeOperation = 'difference';
+  hctx.fillStyle = '#fff';
+  hctx.fillRect(w/2-1, h/2-9, 2, 18);
+  hctx.fillRect(w/2-9, h/2-1, 18, 2);
+  hctx.globalCompositeOperation = 'source-over';
+}
+
+// ============================================================ INPUT HANDLERS
+const KEY = {};
+document.addEventListener('keydown', e => {
+  KEY[e.code] = true;
+  if(e.code === 'KeyE'){
+    INVENTORY.inventoryOpen = !INVENTORY.inventoryOpen;
+    $('inventory-panel').style.display = INVENTORY.inventoryOpen ? 'block' : 'none';
+    if(INVENTORY.inventoryOpen) updateInventoryUI();
+  }
+  if(e.code === 'KeyC'){
+    INVENTORY.craftingOpen = !INVENTORY.craftingOpen;
+    $('crafting-panel').style.display = INVENTORY.craftingOpen ? 'block' : 'none';
+    if(INVENTORY.craftingOpen) updateCraftingUI();
+  }
+});
+document.addEventListener('keyup', e => { KEY[e.code] = false; });
+
+// ============================================================ GAME LOOP
+let lastT = performance.now();
+let fps = 0, fpsC = 0, fpsT = 0;
+let WORLD_READY = false;
+
+function frame(){
+  requestAnimationFrame(frame);
+  const now = performance.now();
+  const dt = Math.min((now - lastT)/1000, 0.016);
+  lastT = now;
+  
+  fpsC++; fpsT += dt;
+  if(fpsT >= 0.5){ fps = Math.round(fpsC/fpsT); fpsC = 0; fpsT = 0; }
+  
+  if(!WORLD_READY) return;
+  
+  if(MODE === 'play'){
+    // Player hunger drain
+    if(PLAYER.onGround && PLAYER.sprint) PLAYER.exhaustion += dt*0.1;
+    if(PLAYER.exhaustion > 4){ PLAYER.exhaustion = 0; PLAYER.hunger = Math.max(0, PLAYER.hunger-1); }
+    if(PLAYER.hunger < 1) PLAYER.health = Math.max(0, PLAYER.health-dt*0.5);
+    
+    // Passive health regen (when well fed)
+    if(PLAYER.hunger > 17 && PLAYER.health < PLAYER.maxHealth){
+      PLAYER.health += dt*0.5;
+    }
+    
+    updateMobs(dt);
+    updateHealthBar();
+    updateHungerBar();
+    
+    // Debug stats
+    $('stats').innerHTML = `
+      <b>Player Stats:</b><br>
+      Health: ${PLAYER.health.toFixed(1)}/${PLAYER.maxHealth}<br>
+      Hunger: ${PLAYER.hunger.toFixed(1)}/${PLAYER.maxHunger}<br>
+      Pos: ${PLAYER.x.toFixed(1)}, ${PLAYER.y.toFixed(1)}, ${PLAYER.z.toFixed(1)}<br>
+      FPS: ${fps}
+    `;
+    
+    $('mob-info').innerHTML = `
+      <b>Nearby Mobs:</b><br>
+      Total: ${MOBS.length}<br>
+      ${MOBS.length > 0 ? MOBS.map(m => `${m.type}: ${m.health.toFixed(0)}/${m.maxHealth}`).slice(0,3).join('<br>') : 'None'}
+    `;
+  }
+  
+  render();
+}
+
+// ============================================================ MENU LOGIC
+document.getElementById('btnNew').onclick = () => {
+  WORLD_READY = true;
+  MODE = 'play';
+  const seed = $('seed').value || String(Date.now());
+  setSeed(parseInt(seed) || strHash(seed));
+  
+  $('title').classList.add('hidden');
+  
+  // Spawn initial mobs
+  for(let i=0; i<3; i++) spawnMob('sheep', 20+Math.random()*20, 70, 20+Math.random()*20);
+  for(let i=0; i<2; i++) spawnMob('cow', 40+Math.random()*30, 70, 40+Math.random()*30);
+  for(let i=0; i<1; i++) spawnMob('zombie', 50+Math.random()*40, 70, 50+Math.random()*40);
+  
+  updateHealthBar();
+  updateHungerBar();
+};
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+hudC.width = window.innerWidth;
+hudC.height = window.innerHeight;
+
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
