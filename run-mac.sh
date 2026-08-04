@@ -13,4 +13,4 @@ sudo tar -xzvf /tmp/macos_backup.tar.gz -C /tmp
 sudo rm -rf /tmp/mac_parts /tmp/macos_backup.tar.gz
 
 echo "🍏 [5/5] تشغيل الماك السحابي الأبدي بـ 2 Cores و 6G RAM..."
-docker run -it --device=/dev/kvm --cap-add NET_ADMIN -p 8006:8006 -v /tmp/macos_storage:/storage -e VERSION=15 -e RAM_SIZE=6G -e DISK_SIZE=40G -e CPU_CORES=2 -e CPU_MODEL="Penryn" docker.io/dockurr/macos
+docker run -it --device=/dev/kvm --cap-add NET_ADMIN -p 8006:8006 -v /tmp/macos_storage:/storage -e VERSION=15 -e RAM_SIZE=6G -e DISK_SIZE=40G -e CPU_CORES=2 docker.io/dockurr/macos
